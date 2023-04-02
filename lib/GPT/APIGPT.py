@@ -2,32 +2,30 @@ import json
 import openai
 
 class API_GPT():
-
-    authKey = None
-    temperature = None
-    maxTokens = None
-    engine = "text-davinci-003"
+    GPTSettings = None
+    settingsPath = "D:\\Users\\geosp\\Documents\\Code\\PY\\Projects\\InstaReel\\InstaReel\\lib\\GPT\\GPTsettings.json"
 
     def __init__(self):
         self.auth()
 
+
     def auth(self):
-        f = open("D:\\Users\\geosp\\Documents\\Code\\PY\\Projects\\InstaReel\\InstaReel\\lib\\GPT\\GPTsettings.json", "r")
-        GPTSettings = json.loads(f.read())
-        self.authKey = GPTSettings["apiKey"]
-        self.temperature = 0.6
-        self.maxTokens = 2048
-        openai.api_key = self.authKey
+        f = open(self.settingsPath, "r")
+        self.GPTSettings = json.loads(f.read())
+        openai.api_key = self.GPTSettings["apiKey"]
+        openai.organization = self.GPTSettings["orgId"]
 
 
     def CustomPrompt(self, PromptString):
-        response = openai.Completion.create(engine = self.engine, prompt = PromptString, temperature = self.temperature, max_tokens = self.maxTokens)
-        print(response.choices[0].text)
-
-
+        print(f"[GPT] Sending prompt: {PromptString[:80]}...")
+        response = openai.Completion.create(engine = self.GPTSettings["engine"], prompt = PromptString, temperature = int(self.GPTSettings["temperature"]), max_tokens = int(self.GPTSettings["maxTokens"]))
+        ans = response.choices[0].text
+        print("[GPT] Response recieved.")
+        return ans.strip()
+    
 
 if __name__ == "__main__":
-    print("Can GPT hear you?")
+    print("Testing GPT: Can we hear you?")
 
     gptapi = API_GPT()
     gptapi.CustomPrompt("Hello, can you hear me GPT?")

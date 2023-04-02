@@ -1,0 +1,5 @@
+# ignore everything in sub directories
+*/
+# exclude these files from ignore
+#!.gitignore
+#!SessionHandeler.py
