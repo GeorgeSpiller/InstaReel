@@ -9,8 +9,10 @@ class SessionHaldeler:
     DefaultSessionName = "[Session]"
     DefaultJson = """{
     "SessionSeed": "",
-    "State": "init",
+    "State": "postLoaded",
     "Title": "",
+    "ScriptWordsPerImage": 60, 
+    "SuplimentImagesWithAiGeneratedImages": 0,
     "Scripts": {
         "Raw": "",
         "Images": [],
@@ -19,11 +21,23 @@ class SessionHaldeler:
         "ProcessedScriptArray": []
     }
 }"""
+    STATE_DICTIONARY = {
+        0: "initalised",                # Just initalised by the Session Handeler
+        1: "postLoaded",                # Has beed loaded with an instagram post
+        2: "preScriptFormat",           # Script data has been pre-formatted
+        3: "scriptFinalised",           # Script has been finaised
+        4: "VoiceOverRec",              # Voice over recoreded.
+        5: "edit",                      # Ready to or being edited
+        6: "render",                    # Ready to or being redered
+        7: "complete",                  # Finished, ready to be deleted
+        99: "ERROR:"                    # Error occured at state    
+    }
 
     Seed = ""
     dir = None
+    voDir = None
+    imgDir = None
     settings = None
-    stateError = None
 
     def __init__(self, seed = ""):
         # sanetise seed so its dir safe
@@ -35,12 +49,16 @@ class SessionHaldeler:
         else:
             self.CreateNewSession()
         self.settings['SessionSeed'] = self.Seed
-    
+
 
     def CreateNewSession(self):
         # create the session Dir
         self.dir = os.path.join(self.DefaultSessionDirLocation, f"{self.DefaultSessionName}{self.Seed}\\")
+        self.voDir = os.path.join(self.DefaultSessionDirLocation, f"{self.DefaultSessionName}{self.Seed}\\VO\\")
+        self.imgDir = os.path.join(self.DefaultSessionDirLocation, f"{self.DefaultSessionName}{self.Seed}\\IMG\\")
         os.mkdir(self.dir)
+        os.mkdir(self.voDir)
+        os.mkdir(self.imgDir)
 
         # create the session json
         self.SyncSettings(self.DefaultJson)
@@ -48,6 +66,8 @@ class SessionHaldeler:
 
     def LoadExistingSession(self):
         self.dir = os.path.join(self.DefaultSessionDirLocation, f"{self.DefaultSessionName}{self.Seed}\\")
+        self.voDir = os.path.join(self.DefaultSessionDirLocation, f"{self.DefaultSessionName}{self.Seed}\\VO\\")
+        self.imgDir = os.path.join(self.DefaultSessionDirLocation, f"{self.DefaultSessionName}{self.Seed}\\IMG\\")
         
         # self.CurrentSession_settings = json.loads(settingsJsonString)
         f = open( f"{self.dir}settings.json", "r")
@@ -78,28 +98,28 @@ class SessionHaldeler:
 
 
     def IntStateToString(self, s):
-        STATE_DICTIONARY = {
-            0: "initalised",                # Just initalised by the Session Handeler
-            1: "postLoaded",                # Has beed loaded with an instagram post
-            2: "preScriptFormat",           # Script data has been pre-formatted
-            3: "scriptFinalised",           # Script has been finaised
-            4: "voWaiting",                 # Waiting for voice over audio files
-            5: "edit",                      # Ready to or being edited
-            6: "render",                    # Ready to or being redered
-            7: "complete",                  # Finished, ready to be deleted
-            99: f"ERROR:{self.stateError}"  # Error occured at state    
-        }
-        return STATE_DICTIONARY[s]
+        if (s == 99):
+            stateError = self.settings['State']
+            return self.STATE_DICTIONARY[s] + stateError
+        return self.STATE_DICTIONARY[s]
+    
+
+    def StrStateToInt(self, s):
+        d_swap = {v: k for k, v in self.STATE_DICTIONARY.items()}
+        try:
+            return d_swap[s]
+        except:
+            return 99
 
 
     def HandelError(self):
         try:
-            self.stateError = self.settings['State']
-            self.settings['State'] = self.IntStateToString(99)
-            print(f"[SessionHandeler] Error raised during state {self.stateError} '{self.IntStateToString(self.stateError)}'")
+            stateError = self.settings['State']
+            self.settings['State'] = self.IntStateToString(99) + stateError
+            print(f"[SessionHandeler] Error raised during state '{stateError}'")
             self.SyncSettings(self.settings)
-        except:
-            print(f"[SessionHandeler] Could not set error state due to error.")
+        except Exception as e:
+            print(f"[SessionHandeler] Could not set error state due to error: {e}")
             raise
 
 

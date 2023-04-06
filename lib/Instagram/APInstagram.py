@@ -28,6 +28,7 @@ class API_Instagram:
         pk = self.cl.media_pk_from_url(url)
         self.rawPostDict = self.cl.media_info(pk).dict()
         print(f"[INSTAGRAM] Data for post recieved. ({pk})")
+        return pk
 
 
     def PostGet_Description(self):

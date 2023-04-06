@@ -1,5 +1,6 @@
 import json 
 import openai
+import re
 
 class API_GPT():
     GPTSettings = None
@@ -27,6 +28,41 @@ class API_GPT():
         print(f"[GPT] Response recieved.")
         return ans.strip().replace("\n", "").replace("\r", "")
 
+
+    def FormatImageDescriptions(self, script):
+        Prompt_ImageDescriptions = self.GPTSettings["prompts"]["ImageDescriptions"].replace("<SCRIPT>", f"\"{script}\".")
+        return self.CustomPrompt(Prompt_ImageDescriptions, "Prompt_ImageDescriptions")
+    
+
+    def Prompt_ImageDescriptions(self, script):
+        # get list of image descriptions that are present in the script
+        GTPresp = self.FormatImageDescriptions(script)
+        # split at all '#.' where # is a number. Assumes there are never more than 10 images
+        imgDesc = [x for x in re.split("[^\d]\d\.", GTPresp) if x != '']
+
+        if (len(imgDesc) == 1):
+            raise Exception(f"GPT did not return image descriptions as a formattable list: {imgDesc}")
+        
+        # add image indexes to begining
+        imageDescList = []
+        for i, v in enumerate(imgDesc):
+            imageDescList.append(f"{i}: {v}")
+            raise Exception("Maybe instead of enumerating, add the image file name and make a dict instead? Will be useful for future VideoEditor shenanigans....")
+        return imageDescList
+
+
+    def Prompt_InsertImage(self, script, images):
+        Prompt_InsertImage = self.GPTSettings["prompts"]["InsertImage"]
+        Prompt_InsertImage = Prompt_InsertImage.replace("<SCRIPT>", f"\"{script}\".")
+        Prompt_InsertImage = Prompt_InsertImage.replace("<IMAGES>", f"({'. '.join(images)})")
+        return self.CustomPrompt(Prompt_InsertImage, "Prompt_InsertImage")
+
+
+    def Prompt_Title(self, script):
+        Prompt_Title = self.GPTSettings["prompts"]["Title"]
+        Prompt_Title = Prompt_Title.replace("<SCRIPT>", f"\"{script}\".")
+        return self.CustomPrompt(Prompt_Title, "Prompt_Title")
+                
 
     def GenerateImage(self, imageDescription):
         print(f"[DAL-E] Sending prompt: {imageDescription}...")

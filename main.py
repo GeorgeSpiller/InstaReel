@@ -1,6 +1,7 @@
 from Sessions.SessionHandler import *
 from lib.GPT.APIGPT import API_GPT
 from lib.Instagram.APInstagram import API_Instagram
+from lib.VoiceOver.APIvo import API_VO
 import re
 import requests
 
@@ -49,44 +50,44 @@ def SuplimentImagesWithAiGeneratedImages(CurrentSession, gpt):
 def MainLoop():
     print("Starting.")
 
-    # Create session
-    CurrentSession = SessionHaldeler()
-    stateInt = CurrentSession.StrStateToInt(CurrentSession.settings['State'])
+    CurrentSession = None
+    stateInt = 0
     # init all the APIs
     gpt = API_GPT()
     insta = API_Instagram()
+    vo = API_VO()
     try:
         while(stateInt != 7):
-            print(f"[STATE] Current State ({stateInt}) '{CurrentSession.settings['State']}'")
-            
+            if (CurrentSession != None):
+               print(f"[STATE] Current State ({stateInt}) '{CurrentSession.settings['State']}'")
+            else:
+                print(f"[STATE] Current State ({stateInt}) 'Constructing....'")
+
             if (stateInt == 0):
                 # Get Description using Instagram API
-                insta.GetPostToProcess()
-                ImageUrlList = insta.PostGet_Images()
-                CurrentSession.settings['Scripts']['Raw'] = insta.PostGet_Description()
-                # save images in order to local dir
-                for i, imgUrl in enumerate(ImageUrlList):
-                    DownloadImageToDir(imgUrl, CurrentSession.imgDir, f"Image{i}")
-
-                CurrentSession.settings['State'] = CurrentSession.IntStateToString(stateInt + 1)
+                seed = str(insta.GetPostToProcess())
+                # Create session
+                CurrentSession = SessionHaldeler(seed)
+                if (int(CurrentSession.StrStateToInt(CurrentSession.settings['State'])) == 1):
+                    ImageUrlList = insta.PostGet_Images()
+                    CurrentSession.settings['Scripts']['Raw'] = insta.PostGet_Description()
+                    # save images in order to local dir
+                    for i, imgUrl in enumerate(ImageUrlList):
+                        DownloadImageToDir(imgUrl, CurrentSession.imgDir, f"Image{i}")
+                
+                stateInt = CurrentSession.StrStateToInt(CurrentSession.settings['State'])
                 CurrentSession.SyncSettings()
             
             elif (stateInt == 1):
-                # get list of image descriptions that are present in the script
-                Prompt_ImageDescriptions = gpt.GPTSettings["prompts"]["ImageDescriptions"].replace("<SCRIPT>", f"\"{CurrentSession.settings['Scripts']['Raw']}\".")
-                GTPresp = gpt.CustomPrompt(Prompt_ImageDescriptions, "Prompt_ImageDescriptions")
                 # get image descriptions
-                imgDesc = [x for x in GTPresp.split('\n') if x != '']  
-                # add image indexes to begining
                 CurrentSession.settings['Scripts']["Images"].clear()
-                for i, v in enumerate(imgDesc):
-                    CurrentSession.settings['Scripts']["Images"].append(f"{i}: {v}")
+                CurrentSession.settings['Scripts']["Images"] = gpt.Prompt_ImageDescriptions(CurrentSession.settings['Scripts']['Raw'])
                 
                 # Pre-script processing
                 # remove all hashtags, except for the #OnThisDay. Remove all image descriptions.
                 CurrentSession.settings['Scripts']["PreProcessedScript"]  = RemoveHashtags(CurrentSession.settings['Scripts']['Raw'])
                 CurrentSession.settings['Scripts']["PreProcessedScript"]  = RemoveImageDescriptions(CurrentSession.settings['Scripts']["PreProcessedScript"] , CurrentSession.settings['Scripts']["Images"])
-                
+
                 # additinal AI generated images
                 # Generate some supplimentry images if there are not many images to show. Generate based on script length
                 if (int(CurrentSession.settings['SuplimentImagesWithAiGeneratedImages']) == 1):
@@ -98,22 +99,28 @@ def MainLoop():
             elif (stateInt == 2):
                 # Script finalising
                 # insert images
-                Prompt_InsertImage = gpt.GPTSettings["prompts"]["InsertImage"]
-                Prompt_InsertImage = Prompt_InsertImage.replace("<SCRIPT>", f"\"{CurrentSession.settings['Scripts']['PreProcessedScript']}\".")
-                Prompt_InsertImage = Prompt_InsertImage.replace("<IMAGES>", f"({'. '.join(CurrentSession.settings['Scripts']['Images'])})")
-                CurrentSession.settings['Scripts']["ProcessedScript"] = gpt.CustomPrompt(Prompt_InsertImage, "Prompt_InsertImage")
-                CurrentSession.settings['Scripts']["ProcessedScriptArray"] = re.split("\(\d+\)", CurrentSession.settings['Scripts']["ProcessedScript"])
-                CurrentSession.settings['Scripts']["ProcessedScriptArray"] = [s.strip() for s in CurrentSession.settings['Scripts']["ProcessedScriptArray"] if s != ""]
+                CurrentSession.settings['Scripts']["ProcessedScript"] = gpt.Prompt_InsertImage(CurrentSession.settings['Scripts']['PreProcessedScript'], CurrentSession.settings['Scripts']['Images'])
+                ProcessedScriptArray = re.split("\(\d+\)", CurrentSession.settings['Scripts']["ProcessedScript"])
+                ProcessedScriptArray = [s.strip() for s in ProcessedScriptArray if len(s) > 3]
+                # GPT likes to insert images before '.' chars, so strip them from the front of entries
+                for strLine in ProcessedScriptArray:
+                    if (strLine[0] == '.'):
+                        strLine = strLine[1:] # remove first char
+                CurrentSession.settings['Scripts']['ProcessedScriptArray'] = ProcessedScriptArray
+
                 # get title
-                Prompt_Title = gpt.GPTSettings["prompts"]["Title"]
-                Prompt_Title = Prompt_Title.replace("<SCRIPT>", f"\"{CurrentSession.settings['Scripts']['PreProcessedScript']}\".")
-                CurrentSession.settings['Title'] = gpt.CustomPrompt(Prompt_Title, "Prompt_Title")
+                CurrentSession.settings['Title'] = gpt.Prompt_Title(CurrentSession.settings['Scripts']['PreProcessedScript'])
                 
                 CurrentSession.settings['State'] = CurrentSession.IntStateToString(stateInt + 1)
                 CurrentSession.SyncSettings()
                 
             elif (stateInt == 3):
-                # get VO
+                # Save all VO's in the session VO dir
+                voCounter = 0
+                for ScriptVoLine in CurrentSession.settings['Scripts']['ProcessedScriptArray']:
+                    vo.TextToMp3(ScriptVoLine, f"{CurrentSession.voDir}\\vo-{voCounter}.mp3")
+                    voCounter += 1
+
                 if (os.path.isdir(CurrentSession.voDir)):
                     # count the number of files in this directory
                     numberOfVOFiles = len([entry for entry in os.listdir(CurrentSession.voDir) if os.path.isfile(os.path.join(CurrentSession.voDir, entry))])
@@ -138,6 +145,7 @@ def MainLoop():
                 CurrentSession.SyncSettings()
             
             else:
+                print(f"Invalid state: {stateInt}")
                 break
                 
             stateInt = CurrentSession.StrStateToInt(CurrentSession.settings['State'])
