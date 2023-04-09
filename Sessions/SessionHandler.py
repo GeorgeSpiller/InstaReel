@@ -2,6 +2,7 @@ import json
 import os
 import re
 from datetime import datetime
+import shutil
 
 
 class SessionHaldeler:
@@ -9,27 +10,28 @@ class SessionHaldeler:
     DefaultSessionName = "[Session]"
     DefaultJson = """{
     "SessionSeed": "",
-    "State": "postLoaded",
+    "State": "preScriptFormat",
     "Title": "",
     "ScriptWordsPerImage": 60, 
     "SuplimentImagesWithAiGeneratedImages": 0,
+    "ImageFileNames": [],
     "Scripts": {
         "Raw": "",
-        "Images": [],
+        "Images": {},
         "PreProcessedScript": "",
         "ProcessedScript": "",
         "ProcessedScriptArray": []
     }
 }"""
     STATE_DICTIONARY = {
-        0: "initalised",                # Just initalised by the Session Handeler
-        1: "postLoaded",                # Has beed loaded with an instagram post
-        2: "preScriptFormat",           # Script data has been pre-formatted
-        3: "scriptFinalised",           # Script has been finaised
-        4: "VoiceOverRec",              # Voice over recoreded.
-        5: "edit",                      # Ready to or being edited
-        6: "render",                    # Ready to or being redered
-        7: "complete",                  # Finished, ready to be deleted
+        -1: "initalised",                # Just initalised by the Session Handeler
+        0: "postLoaded",                # Has beed loaded with an instagram post
+        1: "preScriptFormat",           # Script data has been pre-formatted. Default starting state for an already oaded post.
+        2: "scriptFinalised",           # Script has been finaised
+        3: "VoiceOverRec",              # Voice over recoreded.
+        4: "edit",                      # Ready to or being edited
+        5: "render",                    # Ready to or being redered
+        6: "complete",                  # Finished, ready to be deleted
         99: "ERROR:"                    # Error occured at state    
     }
 
@@ -59,6 +61,12 @@ class SessionHaldeler:
         os.mkdir(self.dir)
         os.mkdir(self.voDir)
         os.mkdir(self.imgDir)
+        
+        # copy starting file to img dir
+        if(os.path.isfile(f"{os.getcwd()}\\Image9.png")):
+            shutil.copy2(f"{os.getcwd()}\\Image9.png", f"{self.imgDir}\\Image9.png")
+        else:
+            print(f"[SESION] [WARNING] Could not locate the default starting image: {os.getcwd()}\\Image9.png")
 
         # create the session json
         self.SyncSettings(self.DefaultJson)
@@ -145,8 +153,8 @@ if __name__ == "__main__":
     print("Starting Session Handeler")
 
     # Create a new session
-    sh = SessionHaldeler()
-
+    # sh = SessionHaldeler()
+    print(f"{os.getcwd()}\\Image9.png")
 
 
 

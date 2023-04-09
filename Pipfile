@@ -10,6 +10,8 @@ instagrapi = "*"
 gtts = "*"
 pillow = "*"
 moviepy = "*"
+azure-cognitiveservices-vision-computervision = "*"
+validators = "*"
 
 [dev-packages]
 

@@ -2,6 +2,7 @@ from Sessions.SessionHandler import *
 from lib.GPT.APIGPT import API_GPT
 from lib.Instagram.APInstagram import API_Instagram
 from lib.VoiceOver.APIvo import API_VO
+from lib.Vid.VideoEditor import ShortFormVideoEditor
 import re
 import requests
 
@@ -17,10 +18,10 @@ def RemoveHashtags(script):
 
 
 def RemoveImageDescriptions(script, imageDescriptionList):
-    for strImagDesc in imageDescriptionList:
+    for strImagDesc in imageDescriptionList.values():
         strImagDesc = re.sub("\d+:\W+", "", strImagDesc).strip()
         script = script.replace(strImagDesc.strip(), "")
-    script = re.sub("\d+.\W+", "", script).strip()
+    script = re.sub("\\n\d+.\W+", "", script).strip()
     return script.strip()
 
 
@@ -47,6 +48,22 @@ def SuplimentImagesWithAiGeneratedImages(CurrentSession, gpt):
         actualWordsPerImage = scriptWordCount // len(CurrentSession.settings['Scripts']["Images"])
 
 
+def ProcessedScriptToArray(scriptRaw):
+    lst = []
+    scriptRaw = f"(9) {scriptRaw}"
+
+    iter = re.finditer(r"\(\d+\)", scriptRaw)
+    indices = [m.start(0) for m in iter]
+
+    for i, v in enumerate(indices):
+        if (i == len(indices)-1): # indecy overflow
+            lst.append( scriptRaw[v:] )
+            return lst
+        lst.append( scriptRaw[v:indices[i+1]] )
+
+    return lst
+
+
 def MainLoop():
     print("Starting.")
 
@@ -56,6 +73,8 @@ def MainLoop():
     gpt = API_GPT()
     insta = API_Instagram()
     vo = API_VO()
+    editor = None # Defined once script has been loaded
+    finalClip = None
     try:
         while(stateInt != 7):
             if (CurrentSession != None):
@@ -71,17 +90,22 @@ def MainLoop():
                 if (int(CurrentSession.StrStateToInt(CurrentSession.settings['State'])) == 1):
                     ImageUrlList = insta.PostGet_Images()
                     CurrentSession.settings['Scripts']['Raw'] = insta.PostGet_Description()
+                    CurrentSession.settings['ImageFileNames'].clear()
                     # save images in order to local dir
                     for i, imgUrl in enumerate(ImageUrlList):
-                        DownloadImageToDir(imgUrl, CurrentSession.imgDir, f"Image{i}")
+                        DownloadImageToDir(imgUrl, CurrentSession.imgDir, f"Image{i+1}")
+                        CurrentSession.settings['ImageFileNames'].append(f"Image{i+1}")
                 
                 stateInt = CurrentSession.StrStateToInt(CurrentSession.settings['State'])
+                if (stateInt == 0):
+                    stateInt = 1
+                    CurrentSession.settings['State'] = CurrentSession.IntStateToString(stateInt)
                 CurrentSession.SyncSettings()
             
             elif (stateInt == 1):
                 # get image descriptions
                 CurrentSession.settings['Scripts']["Images"].clear()
-                CurrentSession.settings['Scripts']["Images"] = gpt.Prompt_ImageDescriptions(CurrentSession.settings['Scripts']['Raw'])
+                CurrentSession.settings['Scripts']["Images"] = gpt.Prompt_ImageDescriptions(CurrentSession.settings['Scripts']['Raw'], CurrentSession.settings['ImageFileNames'])
                 
                 # Pre-script processing
                 # remove all hashtags, except for the #OnThisDay. Remove all image descriptions.
@@ -100,13 +124,16 @@ def MainLoop():
                 # Script finalising
                 # insert images
                 CurrentSession.settings['Scripts']["ProcessedScript"] = gpt.Prompt_InsertImage(CurrentSession.settings['Scripts']['PreProcessedScript'], CurrentSession.settings['Scripts']['Images'])
-                ProcessedScriptArray = re.split("\(\d+\)", CurrentSession.settings['Scripts']["ProcessedScript"])
-                ProcessedScriptArray = [s.strip() for s in ProcessedScriptArray if len(s) > 3]
+                CurrentSession.settings['Scripts']['ProcessedScriptArray'].clear()
+                
+                ProcessedScriptArray = ProcessedScriptToArray(CurrentSession.settings['Scripts']["ProcessedScript"])
+
+                # ProcessedScriptArray = [s.strip() for s in ProcessedScriptArray if len(s) > 3]
                 # GPT likes to insert images before '.' chars, so strip them from the front of entries
                 for strLine in ProcessedScriptArray:
                     if (strLine[0] == '.'):
                         strLine = strLine[1:] # remove first char
-                CurrentSession.settings['Scripts']['ProcessedScriptArray'] = ProcessedScriptArray
+                    CurrentSession.settings['Scripts']['ProcessedScriptArray'].append(strLine)
 
                 # get title
                 CurrentSession.settings['Title'] = gpt.Prompt_Title(CurrentSession.settings['Scripts']['PreProcessedScript'])
@@ -118,7 +145,8 @@ def MainLoop():
                 # Save all VO's in the session VO dir
                 voCounter = 0
                 for ScriptVoLine in CurrentSession.settings['Scripts']['ProcessedScriptArray']:
-                    vo.TextToMp3(ScriptVoLine, f"{CurrentSession.voDir}\\vo-{voCounter}.mp3")
+                    # make sure to remove the image number from the begining for the line
+                    vo.TextToMp3(ScriptVoLine[3:], f"{CurrentSession.voDir}\\vo-{voCounter}.mp3")
                     voCounter += 1
 
                 if (os.path.isdir(CurrentSession.voDir)):
@@ -133,10 +161,27 @@ def MainLoop():
                 CurrentSession.SyncSettings()
 
             elif (stateInt == 4):
+                editor = ShortFormVideoEditor(CurrentSession.settings)
+
+                # load all rushes into the editor
+                for filename in os.listdir(CurrentSession.imgDir):
+                    f = os.path.join(CurrentSession.imgDir, filename)
+                    editor.pre_AddToRushPool(f)
+
+                for filename in os.listdir(CurrentSession.voDir):
+                        f = os.path.join(CurrentSession.voDir, filename)
+                        editor.pre_AddToRushPool(f)
+
+                # just create the short lol ez one line of code thats it no worries
+                finalClip = editor.RunShortsEngine()
+
                 CurrentSession.settings['State'] = CurrentSession.IntStateToString(stateInt + 1)
                 CurrentSession.SyncSettings()
 
             elif (stateInt == 5):
+                editor.RenderToFile(finalClip)
+                editor.CleanWorkspace()
+                
                 CurrentSession.settings['State'] = CurrentSession.IntStateToString(stateInt + 1)
                 CurrentSession.SyncSettings()
 
@@ -159,8 +204,3 @@ def MainLoop():
 
 if __name__ == "__main__":
     MainLoop()
-    # CurrentSession = SessionHaldeler("DEBUG-SESSION")
-    # # init all the APIs
-    # gpt = API_GPT()
-    # p = gpt.GPTSettings['prompts']['GetImageGenerationPrompt'].replace("<SCRIPT>", f"\"{CurrentSession.settings['Scripts']['Raw']}\".")
-    # print(gpt.GenerateImage(p))

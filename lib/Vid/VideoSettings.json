@@ -1,4 +1,11 @@
 {
 
+    "clipSettings": {
+        "fps": 1,
+        "width": 1080,
+        "height": 1920,
+        "bk_blurRadius": 8,
+        "zoomRatio": 0.02
+    }
     
 }

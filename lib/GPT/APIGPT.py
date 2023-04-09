@@ -1,10 +1,11 @@
 import json 
 import openai
 import re
+import os
 
 class API_GPT():
     GPTSettings = None
-    settingsPath = "D:\\Users\\geosp\\Documents\\Code\\PY\\Projects\\InstaReel\\InstaReel\\lib\\GPT\\GPTsettings.json"
+    settingsPath = f"{os.getcwd()}\\lib\\GPT\\GPTsettings.json"
 
     def __init__(self):
         self.auth()
@@ -34,7 +35,7 @@ class API_GPT():
         return self.CustomPrompt(Prompt_ImageDescriptions, "Prompt_ImageDescriptions")
     
 
-    def Prompt_ImageDescriptions(self, script):
+    def Prompt_ImageDescriptions(self, script, ImageFileNames):
         # get list of image descriptions that are present in the script
         GTPresp = self.FormatImageDescriptions(script)
         # split at all '#.' where # is a number. Assumes there are never more than 10 images
@@ -44,17 +45,29 @@ class API_GPT():
             raise Exception(f"GPT did not return image descriptions as a formattable list: {imgDesc}")
         
         # add image indexes to begining
-        imageDescList = []
+        imageDescDict = {}
+        if (len(imgDesc) > len(ImageFileNames)):
+            print(f"[GPT] [Warning] Gave more image descriptions than there are images in the instagram post ({len(imgDesc)} > {len(ImageFileNames)}).")
+        
         for i, v in enumerate(imgDesc):
-            imageDescList.append(f"{i}: {v}")
-            raise Exception("Maybe instead of enumerating, add the image file name and make a dict instead? Will be useful for future VideoEditor shenanigans....")
-        return imageDescList
+            # Assumption here is: All image descriptions are in the order that the images appear in the post
+            # imageDescList.append(f"{i}: {v}")
+            imagePostIndex = i
+            # Wrap around the image post index if GPT has given more image descriptions than there are images in the post
+            if (imagePostIndex > len(ImageFileNames)):
+                imagePostIndex = 0
+            
+            if(ImageFileNames[i] in imageDescDict):
+                imageDescDict[ImageFileNames[i]] += v
+            else:
+                imageDescDict[ImageFileNames[i]] = v
+        return imageDescDict
 
 
     def Prompt_InsertImage(self, script, images):
         Prompt_InsertImage = self.GPTSettings["prompts"]["InsertImage"]
         Prompt_InsertImage = Prompt_InsertImage.replace("<SCRIPT>", f"\"{script}\".")
-        Prompt_InsertImage = Prompt_InsertImage.replace("<IMAGES>", f"({'. '.join(images)})")
+        Prompt_InsertImage = Prompt_InsertImage.replace("<IMAGES>", f"({'. '.join(images.values())})")
         return self.CustomPrompt(Prompt_InsertImage, "Prompt_InsertImage")
 
 
@@ -76,7 +89,8 @@ if __name__ == "__main__":
     print("Testing GPT: Can we hear you?")
 
     gptapi = API_GPT()
-    ans = gptapi.CustomPrompt("Hello, can you hear me GPT?")
+    print(gptapi.GenerateImage("The letter 'A' in an epic high resolution detailed dramatic landscape."))
+    # ans = gptapi.CustomPrompt("Hello, can you hear me GPT?")
     
-    print(ans)
+    # print(ans)
 

@@ -1,9 +1,10 @@
 import json
 from gtts import gTTS
+import os
 
 class API_VO:
     settings = None
-    settingsPath = "D:\\Users\\geosp\\Documents\\Code\\PY\\Projects\\InstaReel\\InstaReel\\lib\\VoiceOver\\VOsettings.json"
+    settingsPath = f"{os.getcwd()}\\lib\\VoiceOver\\VOsettings.json"
 
     def __init__(self):
         self.auth()

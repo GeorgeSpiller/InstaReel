@@ -1,11 +1,14 @@
 from instagrapi import Client
 import json
+import os
+import validators
 
 class API_Instagram:
     settings = None
-    settingsPath = "D:\\Users\\geosp\\Documents\\Code\\PY\\Projects\\InstaReel\\InstaReel\\lib\\Instagram\\InstagramSettings.json"
+    settingsPath = f"{os.getcwd()}\\lib\\Instagram\\InstagramSettings.json"
     cl = None
     rawPostDict = None
+    NullLoginDefaultSeed = None
 
 
     def __init__(self):
@@ -13,18 +16,30 @@ class API_Instagram:
 
 
     def auth(self):
-        f = open(self.settingsPath, "r")
-        self.settings = json.loads(f.read())
-        f.close()
-        print(f"[INSTAGRAM] Logging in as user: {self.settings['username']}")
-        self.cl = Client()
-        self.cl.login(self.settings['username'], self.settings['password'])
-        print(f"[INSTAGRAM] Login successful.")
+        try:
+            f = open(self.settingsPath, "r")
+            self.settings = json.loads(f.read())
+            f.close()
+            print(f"[INSTAGRAM] Logging in as user: {self.settings['username']}. (Status 429 can be ignored).")
+            self.cl = Client()
+            self.cl.login(self.settings['username'], self.settings['password'])
+            print(f"[INSTAGRAM] Login successful.")
+        except AssertionError as ae:
+            print(f"[INSTAGRAM] Failed to login as user {self.settings['username']}: {ae}")
+            self.NullLoginDefaultSeed = input(F"[INSTAGRAM] Please enter an already loaded pk to use instead, or nothing to exit. >> ")
+            if self.NullLoginDefaultSeed == "":
+                exit()
 
 
     def GetPostToProcess(self):
-        url = "https://www.instagram.com/p/CqiLin5piVy/"# input("Enter the url of the post to process.\n>> ")
-        print(f"[INSTAGRAM] Grabbing post data... HARDCODED URL")
+        # if we could not login, the retrun the default seed of an already loaded post
+        if (self.NullLoginDefaultSeed != None):
+            return self.NullLoginDefaultSeed
+        
+        url = input("Enter the url of the post to process. Enter nothing to use hardcoded url\n>> ")
+        if (not validators.url(url)):
+            url = "https://www.instagram.com/p/CqsTGd-vlOi/"
+        print(f"[INSTAGRAM] Grabbing post data...")
         pk = self.cl.media_pk_from_url(url)
         self.rawPostDict = self.cl.media_info(pk).dict()
         print(f"[INSTAGRAM] Data for post recieved. ({pk})")
